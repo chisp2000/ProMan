@@ -1,7 +1,7 @@
 ![](proman.png)
 
-
-# Description:
+# ProMan v0.1 (PROject MANager)
+## Description:
 A project management software tailored for my own needs with features that I haven't seen other free project management software have.
 
 
