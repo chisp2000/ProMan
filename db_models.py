@@ -22,6 +22,8 @@ class LogEntry:
 @dataclass
 class Attachment:
     file_path: str
-    log_id: int
-    is_thumbnail: bool
+    log_id: Optional[int] = None      # Can now be None if linked only to project/global
+    project_id: Optional[int] = None  # NEW: Direct link to project
+    is_global: bool = False           # NEW: Toggle for global availability
+    is_thumbnail: bool = False
     id: Optional[int] = None

@@ -5,11 +5,19 @@ from tkinter import ttk, filedialog
 from typing import Optional
 
 class NewProjectDialog:
-    def __init__(self, parent_root, controller):
+
+    def __init__(self, parent_root, controller, project_to_edit=None):
         self.controller = controller
+        self.project_to_edit = project_to_edit # Store the object
         
         self.dialog = tk.Toplevel(parent_root)
-        self.dialog.title("Create New Project")
+        
+        # Dynamic Title
+        if self.project_to_edit:
+            self.dialog.title(f"Edit Project: {self.project_to_edit.name}")
+        else:
+            self.dialog.title("Create New Project")
+            
         self.dialog.transient(parent_root) 
         self.dialog.grab_set()
         
@@ -73,6 +81,17 @@ class NewProjectDialog:
         
         # Configure column weights to ensure column 1 expands when the window is resized
         main_frame.grid_columnconfigure(1, weight=1) 
+
+        if self.project_to_edit:
+            self.name_entry.insert(0, self.project_to_edit.name)
+            self.priority_var.set(self.project_to_edit.priority)
+            self.date_entry.insert(0, self.project_to_edit.due_date)
+            if self.project_to_edit.thumbnail_path:
+                self.image_path_var.set(self.project_to_edit.thumbnail_path)
+            
+            confirm_text = "Update"
+        else:
+            confirm_text = "Create"
         
         # 6. Control Buttons (Cleaned up and placed on the final row)
         button_frame = ttk.Frame(main_frame)
@@ -86,7 +105,8 @@ class NewProjectDialog:
     def browse_image(self):
         file_path = filedialog.askopenfilename(
             title="Select Project Thumbnail Image",
-            filetypes=(("Image files", "*.gif *.ppm"), ("All files", "*.*")) # Only allow displayable formats
+            # UPDATED FILTER: Now shows PNG and JPG options
+            filetypes=(("Image files", "*.png *.jpg *.jpeg *.gif *.ppm"), ("All files", "*.*"))
         )
         if file_path:
             self.image_path_var.set(file_path)

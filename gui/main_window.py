@@ -62,27 +62,57 @@ class MainWindow:
         # CRITICAL: Ensure the canvas window is created without 'fill' but uses the custom frame
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas_window = self.canvas.create_window((0, 0), 
-                                                        window=self.project_display_frame, 
-                                                        anchor="nw"
-                                                        )
+                                                      window=self.project_display_frame, 
+                                                      anchor="nw"
+                                                      )
         self.canvas.bind('<Configure>', self.on_canvas_resize)
         # ----------------------------------------------------
         
         # --- RIGHT SIDE: Control Buttons ---
         
         buttons_container = ttk.Frame(outer_frame)
-        buttons_container.grid(row=0, column=1, sticky="nsw", padx=2, pady=1) 
+        # LAYOUT FIX: sticky="nw" aligns to top-left. 
+        # pady=(25, 0) pushes it down ~25px to align with the list start (skipping the label).
+        buttons_container.grid(row=0, column=1, sticky="nw", padx=2, pady=(25, 0)) 
+
+        # 1. Open Project Button
+        self.open_project_btn = ttk.Button(
+            buttons_container, 
+            text="📂 Open Project", 
+            command=self.open_project_clicked,
+            state="disabled", # Enabled only when selected
+            width=25
+        )
+        self.open_project_btn.pack(fill='x', pady=(0, 5), padx=10)
+
+        # 2. Batch Edit Attachments
+        ttk.Button(
+            buttons_container, 
+            text="📂 Batch Edit Attachments", 
+            command=self.controller.open_attachment_manager, 
+            width=25
+        ).pack(fill='x', pady=(0, 5), padx=10)
         
-        # Create New Project Button
+        # 3. Create New Project Button
         new_project_btn = ttk.Button(
             buttons_container, 
             text="➕ Create New Project", 
             command=self.controller.open_new_project_dialog,
             width=25 
         )
-        new_project_btn.pack(fill='x', pady=(2, 2), padx=2) 
+        new_project_btn.pack(fill='x', pady=(0, 5), padx=10) 
 
-        # Delete Project Button
+        # 4. Edit Project Button (Re-added to match your logic)
+        self.edit_project_btn = ttk.Button(
+            buttons_container, 
+            text="✏️ Edit Selected Project", 
+            command=self.edit_project_clicked,
+            state="disabled",
+            width=25
+        )
+        self.edit_project_btn.pack(fill='x', pady=(0, 5), padx=10)
+
+        # 5. Delete Project Button
         self.delete_project_btn = ttk.Button(
             buttons_container, 
             text="🗑️ Delete Selected Project", 
@@ -90,25 +120,31 @@ class MainWindow:
             state="disabled",
             width=25
         )
-        self.delete_project_btn.pack(fill='x', pady=5, padx=3)
+        self.delete_project_btn.pack(fill='x', pady=(0, 5), padx=10)
 
         self.refresh_project_list() 
-        
+
+    # --- Button Handlers ---
+
+    def open_project_clicked(self):
+        if self.selected_project_id:
+            self.controller.open_project_detail_window(self.selected_project_id)
+
+    def edit_project_clicked(self):
+        if self.selected_project_id:
+            self.controller.open_edit_project_dialog(self.selected_project_id)
+        else:
+            messagebox.showwarning("No Selection", "Please select a project tile to edit.")
+
     # --- Layout and Selection Logic ---
 
     def on_canvas_resize(self, event):
         """
         Resizes the inner frame (self.project_display_frame) to match the 
-        canvas width, ensuring the project tiles expand correctly and no 
-        horizontal scrollbar appears.
+        canvas width, ensuring the project tiles expand correctly.
         """
         canvas_width = event.width
-        
-        # 1. Update the width of the canvas window item to match the canvas's current width
         self.canvas.itemconfig(self.canvas_window, width=canvas_width - 5)
-        
-        # 2. Tell the content frame to update its geometry and then recalculate the scroll region
-        # This is critical for ensuring the vertical scrollbar correctly accounts for the new size
         self.project_display_frame.update_idletasks()
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
@@ -121,7 +157,16 @@ class MainWindow:
         frame_widget.config(relief="sunken") 
         self.selected_project_id = project_id
         self.last_selected_frame = frame_widget
+        
+        # Enable Buttons
         self.delete_project_btn.config(state="normal")
+
+        if hasattr(self, 'open_project_btn'):
+             self.open_project_btn.config(state="normal")
+             
+        if hasattr(self, 'edit_project_btn'):
+             self.edit_project_btn.config(state="normal")
+
         print(f"Project ID {project_id} selected.")
 
     def delete_project_clicked(self):
@@ -134,7 +179,7 @@ class MainWindow:
             messagebox.showwarning("No Selection", "Please select a project tile to delete first.")
 
 
-    # --- Data Retrieval and Rendering (FIXED WITH GRID AND IMAGE REFERENCE) ---
+    # --- Data Retrieval and Rendering ---
 
     def refresh_project_list(self):
         
@@ -144,7 +189,15 @@ class MainWindow:
         self.project_image_references = [] 
         self.selected_project_id = None 
         self.last_selected_frame = None
+        
+        # Disable Buttons
         self.delete_project_btn.config(state="disabled")
+
+        if hasattr(self, 'open_project_btn'):
+            self.open_project_btn.config(state="disabled")
+            
+        if hasattr(self, 'edit_project_btn'):
+            self.edit_project_btn.config(state="disabled")
         
         projects = self.controller.get_all_projects_sorted()
         
@@ -155,7 +208,6 @@ class MainWindow:
             project_frame.pack(fill='x', padx=5, pady=5)
             
             # --- Image Display (Packed Right) ---
-            # IMPORTANT FIX: Use tk.Label here for height/bg config or if using PhotoImage
             image_label = tk.Label(project_frame) 
             image_loaded = False 
             
@@ -174,12 +226,10 @@ class MainWindow:
                     image_loaded = True
                     
                 except tk.TclError as e:
-                    # Final fallback if the PPM is corrupt or Tcl fails
                     print(f"FATAL IMAGE LOAD ERROR (ID {p.id}): {e}")
                     pass 
 
             if not image_loaded:
-                # FIX APPLIED HERE: Using bg and fg, which are valid for tk.Label, not ttk.Label
                 image_label.config(
                     text="[Image Error/Missing]", 
                     width=20, 
@@ -192,34 +242,31 @@ class MainWindow:
             image_label.pack(side='right', padx=10, pady=5)
             
             # --- Text Container (Packs to the Left, Taking Remaining Space) ---
-            
             text_frame = ttk.Frame(project_frame, style="DarkList.TFrame")
-            # Pack the text frame to the left, filling all remaining space
             text_frame.pack(side='left', fill='both', expand=True, padx=10, pady=5) 
             
             # Configure grid within the text_frame for vertical centering
-            text_frame.grid_columnconfigure(0, weight=1) # Make column 0 expand horizontally
-            text_frame.grid_rowconfigure(0, weight=1) # Add space above content
-            text_frame.grid_rowconfigure(3, weight=1) # Add space below content
+            text_frame.grid_columnconfigure(0, weight=1) 
+            text_frame.grid_rowconfigure(0, weight=1) 
+            text_frame.grid_rowconfigure(3, weight=1) 
             
             # --- Text Details (Centered inside the Text Container) ---
-            
             priority_text = {3: 'HIGH', 2: 'MEDIUM', 1: 'LOW'}.get(p.priority, 'N/A')
             
             # Project Name (Row 1)
             name_label = ttk.Label(text_frame, 
-                                    text=p.name, 
-                                    font=("Inter", 18, "bold"), 
-                                    style="OrangeBold.TLabel",
-                                    anchor="center")
+                                   text=p.name, 
+                                   font=("Inter", 18, "bold"), 
+                                   style="OrangeBold.TLabel",
+                                   anchor="center")
             name_label.grid(row=1, column=0, sticky="n", pady=(5, 2)) 
 
             # Details (Row 2)
             detail_label = ttk.Label(text_frame, 
-                                        text=f"Priority: {priority_text} | Due: {p.due_date}", 
-                                        font=("Inter", 12), 
-                                        style="Orange.TLabel",
-                                        anchor="center") 
+                                     text=f"Priority: {priority_text} | Due: {p.due_date}", 
+                                     font=("Inter", 12), 
+                                     style="Orange.TLabel",
+                                     anchor="center") 
             detail_label.grid(row=2, column=0, sticky="n", pady=(0, 5))
             
             # CRITICAL: Bind selection logic (must be bound to all widgets)
@@ -227,7 +274,6 @@ class MainWindow:
             image_label.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
             text_frame.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
             for child in text_frame.winfo_children():
-                # Bind children to use the main frame for selection
                 child.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
 
         # 3. Update the scroll region
