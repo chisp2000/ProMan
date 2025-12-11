@@ -1,3 +1,7 @@
+Dependencies:
+- ttkthemes, tkinter
+- sqlite3
+
 Todo:
 - Want the ability to organize all my projects according to priority and date.
 - Each project will have an internal logging function.
