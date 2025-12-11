@@ -1,4 +1,3 @@
-# --- main.py ---
 import ctypes
 import sys
 import os
@@ -30,7 +29,7 @@ def show_splash(root):
     # Use ttk.Style for splash screen, or manually set colors if preferred
     splash_label = ttk.Label(splash, 
     text="ProMan Initializing...\nSetting up Database.", 
-    font=("Rockwell", 16), 
+    font=("EASVHS", 16), 
     padding=20)
     splash_label.pack(expand=True, fill='both')
     
@@ -53,8 +52,6 @@ def startup_application():
     root = tk.Tk()
 
     # 3. SET THE WINDOW ICON (Fixes Top-Left Window Icon)
-    # This checks for the icon file and applies it if found.
-    # This must match the filename you include in your installer.
     icon_path = "proman_icon.ico" 
     if os.path.exists(icon_path):
         try:
@@ -66,18 +63,37 @@ def startup_application():
     style = ThemedStyle(root) 
     
     # --- DARK MODE CONFIGURATION ---
-    # The theme handles most background/foreground colors.
     DARK_BG = "#1C1C1C" # Custom very dark gray
     BRIGHT_FG = "#FFFFFF"     # White Foreground Text
     ORANGE_COLOR = "#FFA500"  # Orange accent
+    DARK_BORDER_COLOR = "#2E2E2E" # Use a dark gray that complements the background
     
     # Set the theme. 'black' is a great dark theme.
     style.theme_use('black') 
     
     root.configure(bg=DARK_BG)
 
+    style.configure("TButton", font=("EASVHS", 10))
+
     style.configure(".", background=DARK_BG, foreground=BRIGHT_FG)
     style.configure("TFrame", background=DARK_BG)
+    
+    # --------------------------------------------
+    # --- PROJECT TILE BORDER FIX (new style) ---
+    # --------------------------------------------
+    # Define the style for the Project Tile Border. 
+    # Setting lightcolor/darkcolor to a dark value forces the border to be dark.
+    style.configure("ProjectTile.TFrame", 
+                background=DARK_BG, 
+                lightcolor=DARK_BORDER_COLOR,  # For 'solid' relief color override
+                darkcolor=DARK_BORDER_COLOR,   # For 'solid' relief color override
+                bordercolor=DARK_BORDER_COLOR, # General border color
+                borderwidth=1, 
+                relief="solid")
+
+    # Define the custom list frame style (used by the canvas inner frame)
+    style.configure("DarkList.TFrame", background=DARK_BG)
+    
     style.configure("TLabel", background=DARK_BG, foreground=BRIGHT_FG)
 
     # Configure specific widget styles for accents
@@ -91,10 +107,7 @@ def startup_application():
     style.configure("OrangeBold.TLabel", 
                     background=DARK_BG, 
                     foreground=ORANGE_COLOR, 
-                    font=("Rockwell", 18, "bold")) 
-
-    # Define the custom list frame style (which now uses the theme's DARK_BG)
-    style.configure("DarkList.TFrame", background=DARK_BG)
+                    font=("EASVHS", 18, )) 
     
     root.withdraw() # Hides the main window initially
 

@@ -72,7 +72,7 @@ class NewProjectDialog:
         self.size_label = ttk.Label(
             main_frame, 
             text="Desired Size: 300x200px (GIF/PPM only)",
-            font=("Arial", 9, "italic"),
+            font=("EASVHS", 9, "italic"),
             foreground="darkred"
         )
         # Span all three columns to place it neatly below the inputs

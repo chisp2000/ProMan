@@ -1,5 +1,3 @@
-# --- gui/main_window.py ---
-
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter import PhotoImage
@@ -22,24 +20,30 @@ class MainWindow:
         self.root.title("ProMan - Project Selector")
         self.root.geometry("1000x600") 
 
-        # --- STYLE DEFINITION (For list area background) ---
+        # --- STYLE DEFINITION ---
         style = ttk.Style(self.root)
         # Get the background color defined in main.py (e.g., #2E2E2E)
         LIST_BG_COLOR = style.lookup('TFrame', 'background') 
         
-        # Define a custom style for the inner frame to ensure it uses the background color
+        # Define a custom style for the inner frame background
         style.configure("DarkList.TFrame", background=LIST_BG_COLOR)
-        # ----------------------------------------------------
+        
+        # --- DEFINITIVE FIX: Custom Left-Anchored Button Style with Padding Override ---
+        # Using minimal padding to address potential spacing issues
+        style.configure("LeftAnchor.TButton", anchor="w", padding=[1, 1, 1, 1])
+        # ------------------------
 
         # --- Main Layout Setup (Two Columns: List left, Buttons right) ---
         outer_frame = ttk.Frame(self.root, padding="3")
         outer_frame.pack(fill='both', expand=True)
 
-        outer_frame.grid_columnconfigure(0, weight=100) 
-        outer_frame.grid_columnconfigure(1, weight=1)  
+        # --- FIX: Adjust Column Weights (from previous step) ---
+        outer_frame.grid_columnconfigure(0, weight=1) # Reduced from 100
+        outer_frame.grid_columnconfigure(1, weight=0) # Set to 0 to keep the button column snug
         outer_frame.grid_rowconfigure(0, weight=1) 
+        # ------------------------------------
 
-        # --- LEFT SIDE: Project List ---
+        # --- LEFT SIDE: Project List (Unchanged) ---
         left_frame = ttk.Frame(outer_frame)
         left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 0)) 
         left_frame.grid_rowconfigure(1, weight=1) 
@@ -48,18 +52,13 @@ class MainWindow:
         ttk.Label(left_frame, text="Your Projects (Click to Select):").grid(row=0, column=0, sticky="w", pady=(0, 5))
         
         # Scrollable Canvas setup
-        # 1. SET THE CANVAS BACKGROUND
         self.canvas = tk.Canvas(left_frame, borderwidth=0, bg=LIST_BG_COLOR)
-        
         self.scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.canvas.yview)
-        
-        # 2. SET THE INNER FRAME BACKGROUND USING THE CUSTOM STYLE
         self.project_display_frame = ttk.Frame(self.canvas, style="DarkList.TFrame")
         
         self.canvas.grid(row=1, column=0, sticky="nsew") 
         self.scrollbar.grid(row=1, column=1, sticky="ns")
         
-        # CRITICAL: Ensure the canvas window is created without 'fill' but uses the custom frame
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas_window = self.canvas.create_window((0, 0), 
                                                       window=self.project_display_frame, 
@@ -71,8 +70,6 @@ class MainWindow:
         # --- RIGHT SIDE: Control Buttons ---
         
         buttons_container = ttk.Frame(outer_frame)
-        # LAYOUT FIX: sticky="nw" aligns to top-left. 
-        # pady=(25, 0) pushes it down ~25px to align with the list start (skipping the label).
         buttons_container.grid(row=0, column=1, sticky="nw", padx=2, pady=(25, 0)) 
 
         # 1. Open Project Button
@@ -80,8 +77,9 @@ class MainWindow:
             buttons_container, 
             text="📂 Open Project", 
             command=self.open_project_clicked,
-            state="disabled", # Enabled only when selected
-            width=25
+            state="disabled",
+            # FIX: Removed width=25, Added custom style
+            style="LeftAnchor.TButton" 
         )
         self.open_project_btn.pack(fill='x', pady=(0, 5), padx=10)
 
@@ -90,7 +88,8 @@ class MainWindow:
             buttons_container, 
             text="📂 Batch Edit Attachments", 
             command=self.controller.open_attachment_manager, 
-            width=25
+            # FIX: Removed width=25, Added custom style
+            style="LeftAnchor.TButton" 
         ).pack(fill='x', pady=(0, 5), padx=10)
         
         # 3. Create New Project Button
@@ -98,33 +97,37 @@ class MainWindow:
             buttons_container, 
             text="➕ Create New Project", 
             command=self.controller.open_new_project_dialog,
-            width=25 
+            # FIX: Removed width=25, Added custom style
+            style="LeftAnchor.TButton" 
         )
         new_project_btn.pack(fill='x', pady=(0, 5), padx=10) 
 
-        # 4. Edit Project Button (Re-added to match your logic)
+        # 4. Edit Project Button
         self.edit_project_btn = ttk.Button(
             buttons_container, 
             text="✏️ Edit Selected Project", 
             command=self.edit_project_clicked,
             state="disabled",
-            width=25
+            # FIX: Removed width=25, Added custom style
+            style="LeftAnchor.TButton" 
         )
         self.edit_project_btn.pack(fill='x', pady=(0, 5), padx=10)
 
         # 5. Delete Project Button
         self.delete_project_btn = ttk.Button(
             buttons_container, 
-            text="🗑️ Delete Selected Project", 
+            # Using the simpler unicode symbol for better spacing
+            text="\u232B Delete Selected Project", 
             command=self.delete_project_clicked,
             state="disabled",
-            width=25
+            # FIX: Added custom style
+            style="LeftAnchor.TButton" 
         )
         self.delete_project_btn.pack(fill='x', pady=(0, 5), padx=10)
 
         self.refresh_project_list() 
 
-    # --- Button Handlers ---
+    # --- Button Handlers (Unchanged) ---
 
     def open_project_clicked(self):
         if self.selected_project_id:
@@ -136,7 +139,7 @@ class MainWindow:
         else:
             messagebox.showwarning("No Selection", "Please select a project tile to edit.")
 
-    # --- Layout and Selection Logic ---
+    # --- Layout and Selection Logic (Unchanged) ---
 
     def on_canvas_resize(self, event):
         """
@@ -162,10 +165,10 @@ class MainWindow:
         self.delete_project_btn.config(state="normal")
 
         if hasattr(self, 'open_project_btn'):
-             self.open_project_btn.config(state="normal")
-             
+              self.open_project_btn.config(state="normal")
+              
         if hasattr(self, 'edit_project_btn'):
-             self.edit_project_btn.config(state="normal")
+              self.edit_project_btn.config(state="normal")
 
         print(f"Project ID {project_id} selected.")
 
@@ -179,7 +182,7 @@ class MainWindow:
             messagebox.showwarning("No Selection", "Please select a project tile to delete first.")
 
 
-    # --- Data Retrieval and Rendering ---
+    # --- Data Retrieval and Rendering (UPDATED Frame Style) ---
 
     def refresh_project_list(self):
         
@@ -204,7 +207,10 @@ class MainWindow:
         # 2. Draw a frame for each project
         for p in projects:
             # Main container for the project tile
-            project_frame = ttk.Frame(self.project_display_frame, borderwidth=1, relief="solid", style="DarkList.TFrame")
+            # --- BORDER FIX APPLIED HERE: Use ProjectTile.TFrame style ---
+            project_frame = ttk.Frame(self.project_display_frame, 
+                          style="ProjectTile.TFrame") 
+            
             project_frame.pack(fill='x', padx=5, pady=5)
             
             # --- Image Display (Packed Right) ---
@@ -234,7 +240,7 @@ class MainWindow:
                     text="[Image Error/Missing]", 
                     width=20, 
                     height=8, 
-                    bg="darkred", 
+                    bg="red", 
                     fg="white"
                 ) 
             
@@ -256,23 +262,42 @@ class MainWindow:
             # Project Name (Row 1)
             name_label = ttk.Label(text_frame, 
                                    text=p.name, 
-                                   font=("Inter", 18, "bold"), 
+                                   font=("EASVHS", 20), 
                                    style="OrangeBold.TLabel",
                                    anchor="center")
             name_label.grid(row=1, column=0, sticky="n", pady=(5, 2)) 
 
-            # Details (Row 2)
-            detail_label = ttk.Label(text_frame, 
-                                     text=f"Priority: {priority_text} | Due: {p.due_date}", 
-                                     font=("Inter", 12), 
-                                     style="Orange.TLabel",
-                                     anchor="center") 
-            detail_label.grid(row=2, column=0, sticky="n", pady=(0, 5))
+            # --- UPDATED: Details (Row 2) Composite Approach ---
+            # Instead of one label, we use a Frame to hold multiple labels with mixed fonts
+            detail_frame = ttk.Frame(text_frame, style="DarkList.TFrame")
+            detail_frame.grid(row=2, column=0, sticky="n", pady=(0, 5))
+            
+            pixel_font = ("EASVHS", 14)
+            safe_font = ("Arial", 12) # Fallback font for symbols
+
+            # Helper to add parts and bind click event to them so selection works
+            def add_detail_part(text_str, font_to_use):
+                lbl = ttk.Label(detail_frame, text=text_str, font=font_to_use, style="Orange.TLabel")
+                lbl.pack(side="left")
+                # Bind click to select project
+                lbl.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
+
+            # Build the line: "Priority: HIGH | Due: YYYY-MM-DD"
+            add_detail_part("Priority", pixel_font)
+            add_detail_part(": ", safe_font)      # Safe font for colon
+            add_detail_part(priority_text, pixel_font)
+            add_detail_part(" | ", safe_font)      # Safe font for pipe
+            add_detail_part("Due", pixel_font)
+            add_detail_part(": ", safe_font)      # Safe font for colon
+            add_detail_part(p.due_date, pixel_font)
+            # ---------------------------------------------------
             
             # CRITICAL: Bind selection logic (must be bound to all widgets)
             project_frame.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
             image_label.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
             text_frame.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
+            
+            # Also bind any direct children of text_frame (like name_label and detail_frame)
             for child in text_frame.winfo_children():
                 child.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
 
