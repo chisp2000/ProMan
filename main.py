@@ -51,6 +51,9 @@ def startup_application():
     # 2. CREATE THE TKINTER ROOT OBJECT
     root = tk.Tk()
 
+    root.withdraw() # Hides the main window initially
+
+
     # 3. SET THE WINDOW ICON (Fixes Top-Left Window Icon)
     icon_path = "proman_icon.ico" 
     if os.path.exists(icon_path):
@@ -109,8 +112,6 @@ def startup_application():
                     foreground=ORANGE_COLOR, 
                     font=("EASVHS", 18, )) 
     
-    root.withdraw() # Hides the main window initially
-
     # 4. SHOW THE SPLASH SCREEN and LOAD DATA
     try:
         show_splash(root) 
