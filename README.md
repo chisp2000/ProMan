@@ -8,6 +8,8 @@ A project management software tailored for my own needs with features that I hav
 ## Dependencies:
 - ttkthemes, tkinter
 - sqlite3
+- Pillow
+- EASVHS (modified)
 
 ## Todo:
 - Want the ability to organize all my projects according to priority and date.
