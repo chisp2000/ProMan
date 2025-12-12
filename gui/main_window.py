@@ -29,7 +29,7 @@ class MainWindow:
         style.configure("DarkList.TFrame", background=LIST_BG_COLOR)
         
         # --- DEFINITIVE FIX: Custom Left-Anchored Button Style with Padding Override ---
-        # Using minimal padding to address potential spacing issues
+        # This fixes the left-spacing issue by reducing the theme's internal button padding.
         style.configure("LeftAnchor.TButton", anchor="w", padding=[1, 1, 1, 1])
         # ------------------------
 
@@ -37,23 +37,24 @@ class MainWindow:
         outer_frame = ttk.Frame(self.root, padding="3")
         outer_frame.pack(fill='both', expand=True)
 
-        # --- FIX: Adjust Column Weights (from previous step) ---
-        outer_frame.grid_columnconfigure(0, weight=1) # Reduced from 100
-        outer_frame.grid_columnconfigure(1, weight=0) # Set to 0 to keep the button column snug
+        # --- FIX: Adjust Column Weights ---
+        outer_frame.grid_columnconfigure(0, weight=1) 
+        outer_frame.grid_columnconfigure(1, weight=0) 
         outer_frame.grid_rowconfigure(0, weight=1) 
         # ------------------------------------
 
-        # --- LEFT SIDE: Project List (Unchanged) ---
-        left_frame = ttk.Frame(outer_frame)
-        left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 0)) 
-        left_frame.grid_rowconfigure(1, weight=1) 
-        left_frame.grid_columnconfigure(0, weight=1) 
+        # --- LEFT SIDE: Project List ---
+        # CRITICAL: We save self.left_frame so we can identify it in the scroll handler
+        self.left_frame = ttk.Frame(outer_frame)
+        self.left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 0)) 
+        self.left_frame.grid_rowconfigure(1, weight=1) 
+        self.left_frame.grid_columnconfigure(0, weight=1) 
         
-        ttk.Label(left_frame, text="Your Projects (Click to Select):").grid(row=0, column=0, sticky="w", pady=(0, 5))
+        ttk.Label(self.left_frame, text="Your Projects (Click to Select):").grid(row=0, column=0, sticky="w", pady=(0, 5))
         
-        # Scrollable Canvas setup
-        self.canvas = tk.Canvas(left_frame, borderwidth=0, bg=LIST_BG_COLOR)
-        self.scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.canvas.yview)
+        # Scrollable Canvas setup (self.canvas is created here!)
+        self.canvas = tk.Canvas(self.left_frame, borderwidth=0, bg=LIST_BG_COLOR)
+        self.scrollbar = ttk.Scrollbar(self.left_frame, orient="vertical", command=self.canvas.yview)
         self.project_display_frame = ttk.Frame(self.canvas, style="DarkList.TFrame")
         
         self.canvas.grid(row=1, column=0, sticky="nsew") 
@@ -61,11 +62,22 @@ class MainWindow:
         
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas_window = self.canvas.create_window((0, 0), 
-                                                      window=self.project_display_frame, 
-                                                      anchor="nw"
-                                                      )
+                                                        window=self.project_display_frame, 
+                                                        anchor="nw"
+                                                        )
         self.canvas.bind('<Configure>', self.on_canvas_resize)
-        # ----------------------------------------------------
+        
+        # --- SCROLL WHEEL/TRACKPAD FIX: Global Binding with Container Check ---
+        
+        # 1. Bind X11 scroll events (Linux/older systems) directly to the canvas
+        self.canvas.bind("<Button-4>", lambda e: self.on_mousewheel(e, 1))
+        self.canvas.bind("<Button-5>", lambda e: self.on_mousewheel(e, -1))
+        
+        # 2. GLOBAL BINDING: Catch the MouseWheel event anywhere in the app
+        #    The handler '_on_mousewheel_propagate' will check if the mouse is over 'self.left_frame'
+        self.root.bind_all("<MouseWheel>", self._on_mousewheel_propagate)
+        
+        # ------------------------------------------------------------
         
         # --- RIGHT SIDE: Control Buttons ---
         
@@ -78,7 +90,6 @@ class MainWindow:
             text="📂 Open Project", 
             command=self.open_project_clicked,
             state="disabled",
-            # FIX: Removed width=25, Added custom style
             style="LeftAnchor.TButton" 
         )
         self.open_project_btn.pack(fill='x', pady=(0, 5), padx=10)
@@ -88,7 +99,6 @@ class MainWindow:
             buttons_container, 
             text="📂 Batch Edit Attachments", 
             command=self.controller.open_attachment_manager, 
-            # FIX: Removed width=25, Added custom style
             style="LeftAnchor.TButton" 
         ).pack(fill='x', pady=(0, 5), padx=10)
         
@@ -97,7 +107,6 @@ class MainWindow:
             buttons_container, 
             text="➕ Create New Project", 
             command=self.controller.open_new_project_dialog,
-            # FIX: Removed width=25, Added custom style
             style="LeftAnchor.TButton" 
         )
         new_project_btn.pack(fill='x', pady=(0, 5), padx=10) 
@@ -108,7 +117,6 @@ class MainWindow:
             text="✏️ Edit Selected Project", 
             command=self.edit_project_clicked,
             state="disabled",
-            # FIX: Removed width=25, Added custom style
             style="LeftAnchor.TButton" 
         )
         self.edit_project_btn.pack(fill='x', pady=(0, 5), padx=10)
@@ -116,18 +124,16 @@ class MainWindow:
         # 5. Delete Project Button
         self.delete_project_btn = ttk.Button(
             buttons_container, 
-            # Using the simpler unicode symbol for better spacing
             text="\u232B Delete Selected Project", 
             command=self.delete_project_clicked,
             state="disabled",
-            # FIX: Added custom style
             style="LeftAnchor.TButton" 
         )
         self.delete_project_btn.pack(fill='x', pady=(0, 5), padx=10)
 
         self.refresh_project_list() 
 
-    # --- Button Handlers (Unchanged) ---
+    # --- Button Handlers ---
 
     def open_project_clicked(self):
         if self.selected_project_id:
@@ -139,7 +145,7 @@ class MainWindow:
         else:
             messagebox.showwarning("No Selection", "Please select a project tile to edit.")
 
-    # --- Layout and Selection Logic (Unchanged) ---
+    # --- Layout and Selection Logic ---
 
     def on_canvas_resize(self, event):
         """
@@ -150,6 +156,62 @@ class MainWindow:
         self.canvas.itemconfig(self.canvas_window, width=canvas_width - 5)
         self.project_display_frame.update_idletasks()
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
+
+    # --- UPDATED: Mouse Wheel Propagation Handler ---
+    def _on_mousewheel_propagate(self, event):
+        """
+        Intercepts global MouseWheel events.
+        It checks if the mouse is currently over the 'left_frame' (the list container).
+        If so, it triggers scrolling.
+        """
+        # 1. Identify which widget is under the mouse cursor
+        widget_under_mouse = self.root.winfo_containing(event.x_root, event.y_root)
+        
+        if widget_under_mouse is None:
+            return
+
+        # 2. Traverse up the widget hierarchy to see if we are inside self.left_frame
+        current_widget = widget_under_mouse
+        while current_widget:
+            # If we find our list container in the ancestry, we should scroll
+            if current_widget == self.left_frame:
+                self.on_mousewheel(event)
+                return "break" # Stop event from bubbling up to root
+            
+            # Move up to the parent widget
+            current_widget = current_widget.master
+            
+            # Stop if we hit the root window
+            if current_widget == self.root:
+                break
+
+    # --- UPDATED: Mouse Wheel Handler for Trackpads ---
+    def on_mousewheel(self, event, direction=None):
+        """
+        Handles mouse wheel and trackpad scroll events for the canvas.
+        """
+        # Determine the scroll delta/direction
+        if direction is not None:
+            # This handles Button-4/Button-5 (X11 systems)
+            delta = direction * -1 
+        elif event.delta:
+            # Windows/macOS MouseWheel
+            delta = event.delta
+        else:
+            return
+
+        # Normalization Logic:
+        # Standard mouse wheel scrolls in large jumps (e.g., +/- 120).
+        # Trackpads scroll in small increments.
+        
+        if abs(delta) >= 120:
+            # Normalize large scrolls (standard wheel click) to 1 unit * 4
+            scroll_amount = -1 * (delta // abs(delta)) * 4
+        else:
+            # For trackpads (small delta values), use delta directly for smooth scrolling
+            scroll_amount = -1 * delta * 0.5 
+        
+        self.canvas.yview_scroll(int(scroll_amount), "units")
 
     def select_project(self, project_id: int, frame_widget):
         """Sets the selected project ID and updates the GUI appearance."""
@@ -182,7 +244,7 @@ class MainWindow:
             messagebox.showwarning("No Selection", "Please select a project tile to delete first.")
 
 
-    # --- Data Retrieval and Rendering (UPDATED Frame Style) ---
+    # --- Data Retrieval and Rendering ---
 
     def refresh_project_list(self):
         
@@ -207,10 +269,8 @@ class MainWindow:
         # 2. Draw a frame for each project
         for p in projects:
             # Main container for the project tile
-            # --- BORDER FIX APPLIED HERE: Use ProjectTile.TFrame style ---
             project_frame = ttk.Frame(self.project_display_frame, 
-                          style="ProjectTile.TFrame") 
-            
+                                      style="ProjectTile.TFrame") 
             project_frame.pack(fill='x', padx=5, pady=5)
             
             # --- Image Display (Packed Right) ---

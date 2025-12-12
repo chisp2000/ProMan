@@ -23,7 +23,7 @@ class AttachmentManager:
         btn_frame = ttk.Frame(self.window)
         btn_frame.pack(fill='x', pady=10)
         
-        ttk.Button(btn_frame, text="Toggle Global/Project", command=self.toggle_scope).pack(side='left', padx=10)
+        ttk.Button(btn_frame, text="Toggle Global or Project", command=self.toggle_scope).pack(side='left', padx=10)
         ttk.Button(btn_frame, text="Delete Selected", command=self.delete_selected).pack(side='left', padx=10)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_list).pack(side='right', padx=10)
 

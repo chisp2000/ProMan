@@ -1,9 +1,9 @@
-# --- gui/project_detail_window.py ---
-
 import tkinter as tk
-from tkinter import ttk, PhotoImage, simpledialog, messagebox
+from tkinter import ttk, PhotoImage, simpledialog, messagebox, filedialog
 import os
-import re # REQUIRED: For parsing the [ref:ID] tags
+import re 
+import platform
+import subprocess
 from datetime import datetime
 
 class ProjectDetailWindow:
@@ -12,7 +12,7 @@ class ProjectDetailWindow:
         self.project = project
         self.image_refs = []
         
-        # NEW: Dictionary to map Attachment ID -> Widget Frame for highlighting
+        # Map Attachment ID -> Widget Frame
         self.media_widgets = {} 
         
         self.current_log_id = None 
@@ -39,15 +39,15 @@ class ProjectDetailWindow:
         main_frame.grid_rowconfigure(1, weight=1)
 
         # --- HEADERS ---
-        ttk.Label(main_frame, text="Select Day", font=("Arial", 12, "bold"), foreground="#FFA500").grid(row=0, column=0, sticky="w", pady=5)
-        ttk.Label(main_frame, text="Log Entries", font=("Arial", 12, "bold"), foreground="#FFA500").grid(row=0, column=1, sticky="w", pady=5)
-        ttk.Label(main_frame, text="Reference Media", font=("Arial", 12, "bold"), foreground="#FFA500").grid(row=0, column=2, sticky="w", pady=5)
+        ttk.Label(main_frame, text="Select Day", font=("EASVHS", 12, "bold"), foreground="#FFA500").grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Label(main_frame, text="Log Entries", font=("EASVHS", 12, "bold"), foreground="#FFA500").grid(row=0, column=1, sticky="w", pady=5)
+        ttk.Label(main_frame, text="Reference Media", font=("EASVHS", 12, "bold"), foreground="#FFA500").grid(row=0, column=2, sticky="w", pady=5)
 
         # --- COL 0: DATE LIST & CONTROLS ---
         date_frame = ttk.Frame(main_frame)
         date_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
         
-        self.date_listbox = tk.Listbox(date_frame, bg=self.bg_color, fg="white", font=("Arial", 11), borderwidth=0, highlightthickness=1)
+        self.date_listbox = tk.Listbox(date_frame, bg=self.bg_color, fg="white", font=("EASVHS", 11), borderwidth=0, highlightthickness=1)
         self.date_listbox.pack(side='top', fill='both', expand=True)
         self.date_listbox.bind('<<ListboxSelect>>', self.on_date_selected)
         
@@ -55,7 +55,6 @@ class ProjectDetailWindow:
         btn_frame = ttk.Frame(date_frame)
         btn_frame.pack(side='bottom', fill='x', pady=5)
         
-        # Buttons are stacked vertically (Corrected layout)
         ttk.Button(btn_frame, text="➕ Add Entry", command=self.add_entry_clicked).pack(fill='x', pady=2)
         ttk.Button(btn_frame, text="➖ Delete Entry", command=self.delete_date_clicked).pack(fill='x', pady=2)
 
@@ -72,20 +71,20 @@ class ProjectDetailWindow:
         save_btn = ttk.Button(save_area, text="💾 Save Changes to Text", command=self.save_text_clicked)
         save_btn.pack(side='left')
         
-        self.status_label = ttk.Label(save_area, text="", font=("Arial", 10, "italic"), foreground="lightgreen")
+        self.status_label = ttk.Label(save_area, text="", font=("EASVHS", 10, "italic"), foreground="lightgreen")
         self.status_label.pack(side='left', padx=10)
         
-        # --- COL 2: REFERENCE MEDIA ---
-        media_frame_container = ttk.Frame(main_frame)
-        media_frame_container.grid(row=1, column=2, sticky="nsew")
+        # --- COL 2: REFERENCE MEDIA (Scrollable) ---
+        self.media_frame_container = ttk.Frame(main_frame)
+        self.media_frame_container.grid(row=1, column=2, sticky="nsew")
         
-        # 1. Add Media Button (AT THE BOTTOM)
-        media_btn_frame = ttk.Frame(media_frame_container)
+        # 1. Add Media Button (Bottom)
+        media_btn_frame = ttk.Frame(self.media_frame_container)
         media_btn_frame.pack(side='bottom', fill='x', pady=(5, 0))
         ttk.Button(media_btn_frame, text="➕ Add Media", command=self.add_media_clicked).pack(fill='x')
         
-        # 2. Canvas Area (AT THE TOP)
-        canvas_area = ttk.Frame(media_frame_container)
+        # 2. Canvas Area (Top)
+        canvas_area = ttk.Frame(self.media_frame_container)
         canvas_area.pack(side='top', fill='both', expand=True)
         
         self.media_canvas = tk.Canvas(canvas_area, bg=self.bg_color, borderwidth=0)
@@ -101,14 +100,69 @@ class ProjectDetailWindow:
         
         self.media_inner_frame.bind("<Configure>", lambda e: self.media_canvas.configure(scrollregion=self.media_canvas.bbox("all")))
 
+        # --- SCROLLING LOGIC ---
+        self.media_canvas.bind("<Button-4>", lambda e: self.on_mousewheel(e, 1))
+        self.media_canvas.bind("<Button-5>", lambda e: self.on_mousewheel(e, -1))
+        self.media_frame_container.bind('<Enter>', self._activate_scroll_binding)
+
+    # --- SCROLL HANDLERS ---
+    
+    def _activate_scroll_binding(self, event):
+        """Called when mouse enters the media container."""
+        self.window.bind_all("<MouseWheel>", self._on_mousewheel_propagate)
+
+    def _on_mousewheel_propagate(self, event):
+        """Checks if the mouse is over the media container before scrolling."""
+        widget_under_mouse = self.window.winfo_containing(event.x_root, event.y_root)
+        
+        if widget_under_mouse is None:
+            return
+
+        current_widget = widget_under_mouse
+        while current_widget:
+            if current_widget == self.media_frame_container:
+                self.on_mousewheel(event)
+                return "break"
+            current_widget = current_widget.master
+            if current_widget == self.window or current_widget is None:
+                break
+
+    def on_mousewheel(self, event, direction=None):
+        if direction is not None:
+            delta = direction * -1 
+        elif event.delta:
+            delta = event.delta
+        else:
+            return
+
+        if abs(delta) >= 120:
+            scroll_amount = -1 * (delta // abs(delta)) * 4
+        else:
+            scroll_amount = -1 * delta * 0.5 
+        
+        self.media_canvas.yview_scroll(int(scroll_amount), "units")
+
+    # --- FUNCTIONALITY ---
 
     def add_media_clicked(self):
         from tkinter import filedialog
-        file_path = filedialog.askopenfilename(filetypes=[("Images", "*.gif *.ppm"), ("All", "*.*")])
+        # UPDATED FILTER: Allow all common inputs. 
+        # The controller will convert them to PNG.
+        file_path = filedialog.askopenfilename(
+            title="Select Image",
+            filetypes=[
+                ("Images", "*.png *.jpg *.jpeg *.webp *.bmp *.gif"), 
+                ("All Files", "*.*")
+            ]
+        )
         
         if file_path:
             is_global = messagebox.askyesno("Scope", "Make this attachment GLOBAL (visible to all projects)?\n\nYes = Global\nNo = Project Specific")
+            
+            # The controller now handles the conversion to PNG
             self.controller.add_attachment(file_path, self.project.id, is_global)
+            
+            # Reload to show the new PNG
             self.load_media()
 
     def load_dates(self):
@@ -122,7 +176,6 @@ class ProjectDetailWindow:
             self.current_log_id = None
 
     def on_date_selected(self, event):
-        """Loads logs and parses them for [ref:ID] tags."""
         selection = self.date_listbox.curselection()
         if not selection: return
         
@@ -136,58 +189,56 @@ class ProjectDetailWindow:
         if logs:
             latest_log = logs[0]
             self.current_log_id = latest_log.id
-            # UPDATED: Use the helper to insert text with clickable links
             self.insert_text_with_links(latest_log.content)
 
-    # --- NEW: TEXT PARSING LOGIC ---
     def insert_text_with_links(self, content):
-        """Parses [ref:ID] patterns and makes them clickable."""
         pattern = re.compile(r'\[ref:(\d+)\]')
-        
         start_idx = 0
         for match in pattern.finditer(content):
-            # Insert normal text before the tag
             pre_text = content[start_idx:match.start()]
             self.log_text_area.insert(tk.END, pre_text)
             
-            # Insert the TAGGED text
             ref_id = match.group(1)
             tag_name = f"ref_{ref_id}"
             link_text = f"[ref:{ref_id}]"
             
             self.log_text_area.insert(tk.END, link_text, tag_name)
-            
-            # Style the tag (Blue + Underline)
             self.log_text_area.tag_config(tag_name, foreground="#4da6ff", underline=True)
-            
-            # Bind events (Click + Hover)
             self.log_text_area.tag_bind(tag_name, "<Button-1>", lambda e, rid=ref_id: self.highlight_media(rid))
             self.log_text_area.tag_bind(tag_name, "<Enter>", lambda e: self.log_text_area.config(cursor="hand2"))
             self.log_text_area.tag_bind(tag_name, "<Leave>", lambda e: self.log_text_area.config(cursor="arrow"))
             
             start_idx = match.end()
-            
-        # Insert any remaining text
         self.log_text_area.insert(tk.END, content[start_idx:])
 
-    # --- NEW: HIGHLIGHT LOGIC ---
+    # --- UPDATED: HIGHLIGHT & JUMP LOGIC ---
     def highlight_media(self, attachment_id):
-        """Finds the media widget by ID and highlights it."""
+        """Finds the media widget, Highlights it, and JUMPS (scrolls) to it."""
         try:
             att_id = int(attachment_id)
             if att_id in self.media_widgets:
                 target_frame = self.media_widgets[att_id]
                 
-                # 1. Reset all frames to default style
+                # 1. Reset all frames
                 for fid, frame in self.media_widgets.items():
                     frame.config(style="DarkList.TFrame") 
                 
-                # 2. Highlight the target
-                # We create a temporary highlight style
+                # 2. Highlight Target
                 self.style.configure("Highlight.TFrame", background="#555500", borderwidth=2, relief="solid")
                 target_frame.config(style="Highlight.TFrame")
                 
-                # 3. Ensure it's visible (Scroll to it if you implement advanced scrolling later)
+                # 3. JUMP TO WIDGET (The Scroll Fix)
+                self.window.update_idletasks() # Ensure sizes are calculated
+                
+                # Calculate Y position of the widget inside the inner_frame
+                y_coord = target_frame.winfo_y()
+                canvas_height = self.media_inner_frame.winfo_height()
+                visible_height = self.media_canvas.winfo_height()
+                
+                # Calculate the scroll fraction (0.0 to 1.0)
+                if canvas_height > visible_height:
+                    fraction = y_coord / canvas_height
+                    self.media_canvas.yview_moveto(fraction)
                 
                 # 4. Remove highlight after 2 seconds
                 self.window.after(2000, lambda: target_frame.config(style="DarkList.TFrame"))
@@ -195,11 +246,26 @@ class ProjectDetailWindow:
         except ValueError:
             pass
 
+    # --- NEW: OPEN IMAGE LOGIC ---
+    def open_image_file(self, file_path):
+        """Opens the image using the default OS viewer."""
+        if os.path.exists(file_path):
+            try:
+                if platform.system() == 'Darwin':       # macOS
+                    subprocess.call(('open', file_path))
+                elif platform.system() == 'Windows':    # Windows
+                    os.startfile(file_path)
+                else:                                   # linux variants
+                    subprocess.call(('xdg-open', file_path))
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not open file: {e}")
+        else:
+            messagebox.showwarning("File Missing", "The image file could not be found.")
+
     def save_text_clicked(self):
         if self.current_log_id is not None:
             content = self.log_text_area.get("1.0", "end-1c")
             self.controller.save_log_text(self.current_log_id, content)
-            
             self.status_label.config(text="Changes saved successfully!", foreground="#00FF00")
             self.window.after(3000, lambda: self.status_label.config(text=""))
         else:
@@ -230,45 +296,35 @@ class ProjectDetailWindow:
             self.current_log_id = None
             self.status_label.config(text="Date deleted.", foreground="orange")
 
-    def add_media_clicked(self):
-        from tkinter import filedialog
-        file_path = filedialog.askopenfilename(
-            # UPDATED FILTER
-            filetypes=[("Image files", "*.png *.jpg *.jpeg *.gif *.ppm"), ("All", "*.*")]
-        )
-        
-        if file_path:
-            is_global = messagebox.askyesno("Scope", "Make this attachment GLOBAL (visible to all projects)?\n\nYes = Global\nNo = Project Specific")
-            
-            # Controller will now handle the conversion!
-            self.controller.add_attachment(file_path, self.project.id, is_global)
-            self.load_media()
-
-    # --- UPDATED: MEDIA LOADING WITH ID TRACKING ---
     def load_media(self):
         attachments = self.controller.get_attachments_for_project(self.project.id)
         
         for widget in self.media_inner_frame.winfo_children():
             widget.destroy()
         
-        # Reset the widget map
         self.media_widgets = {} 
 
         for att in attachments:
             if os.path.exists(att.file_path):
-                # Using a named style allows us to swap it for highlighting later
+                # Use a Frame to hold the Image and Label
                 item_frame = ttk.Frame(self.media_inner_frame, padding=5, style="DarkList.TFrame")
                 item_frame.pack(fill='x', pady=5)
                 
-                # Store the reference for highlighting
                 self.media_widgets[att.id] = item_frame
                 
-                # Show the ID so user knows what to type in the log [ref:ID]
-                ttk.Label(item_frame, text=f"ID: {att.id}", font=("Arial", 9, "bold"), foreground="gray").pack(anchor='w')
+                # ID Label
+                ttk.Label(item_frame, text=f"ID: {att.id}", font=("EASVHS", 9, "bold"), foreground="gray").pack(anchor='w')
                 
+                # Image Label
                 img_lbl = ttk.Label(item_frame)
                 img_lbl.pack()
                 
+                # NEW: Bind click on the image to open the file
+                # Use cursor="hand2" to indicate clickability
+                img_lbl.bind("<Button-1>", lambda e, path=att.file_path: self.open_image_file(path))
+                img_lbl.bind("<Enter>", lambda e: img_lbl.config(cursor="hand2"))
+                img_lbl.bind("<Leave>", lambda e: img_lbl.config(cursor="arrow"))
+
                 try:
                     photo = PhotoImage(file=att.file_path)
                     if photo.width() > 200:
@@ -279,4 +335,7 @@ class ProjectDetailWindow:
                 except:
                     img_lbl.config(text="[Image Error]", foreground="red")
                 
-                ttk.Label(item_frame, text=os.path.basename(att.file_path), font=("Arial", 8)).pack()
+                # Filename Label (also clickable optionally)
+                name_lbl = ttk.Label(item_frame, text=os.path.basename(att.file_path), font=("EASVHS", 8))
+                name_lbl.pack()
+                name_lbl.bind("<Button-1>", lambda e, path=att.file_path: self.open_image_file(path))
