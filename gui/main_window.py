@@ -1,9 +1,12 @@
 import tkinter as tk
+import platform  # Needed to detect OS for opening files
+import subprocess
 from tkinter import ttk, messagebox
 from tkinter import PhotoImage
 import os 
 # Assuming ttkthemes is available, but using standard ttk.Style commands
 from ttkthemes import ThemedStyle 
+
 
 class MainWindow:
     def __init__(self, root, controller):
@@ -19,6 +22,7 @@ class MainWindow:
         
         self.root.title("ProMan - Project Selector")
         self.root.geometry("1000x600") 
+        
 
         # --- STYLE DEFINITION ---
         style = ttk.Style(self.root)
@@ -138,6 +142,7 @@ class MainWindow:
     def open_project_clicked(self):
         if self.selected_project_id:
             self.controller.open_project_detail_window(self.selected_project_id)
+    
 
     def edit_project_clicked(self):
         if self.selected_project_id:
@@ -265,6 +270,8 @@ class MainWindow:
             self.edit_project_btn.config(state="disabled")
         
         projects = self.controller.get_all_projects_sorted()
+
+        
         
         # 2. Draw a frame for each project
         for p in projects:
@@ -354,6 +361,7 @@ class MainWindow:
             
             # CRITICAL: Bind selection logic (must be bound to all widgets)
             project_frame.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
+            
             image_label.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
             text_frame.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
             

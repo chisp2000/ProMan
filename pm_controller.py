@@ -3,8 +3,9 @@ import tkinter as tk
 from tkinter import messagebox
 import uuid 
 import time
+import shutil
 from typing import Optional
-from PIL import Image # CRITICAL: Ensure Pillow is imported
+from PIL import Image # CRITICAL: Ensure Pillow is installed via 'pip install Pillow'
 
 from db_models import Project
 from db_controller import DatabaseManager 
@@ -18,53 +19,79 @@ class ProjectManagementController:
     def set_root(self, root):
         self.root = root
 
-    # --- IMAGE CONVERSION UTILITY ---
+    # --- FILE & IMAGE PROCESSING UTILITY ---
     
-    def save_image_as_png(self, source_path: str, is_thumbnail: bool = False) -> Optional[str]:
+    def process_file_attachment(self, source_path: str, is_thumbnail: bool = False) -> Optional[str]:
         """
-        Takes a source image, converts it to PNG, optionally resizes it,
-        saves it to the 'media' folder, and returns the new file path.
+        Handles all file types. 
+        - Images: Converted to PNG and optionally resized (for thumbnails).
+        - Non-Images: Copied directly to the 'media' folder.
+        Returns the new relative path for database storage.
         """
         if not source_path or not os.path.exists(source_path):
             return None
 
-        # 1. Prepare Directory
+        # 1. Prepare Media Directory
         save_dir = "media"
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
-        # 2. Generate Unique Filename
+        # 2. Identify File Type
+        ext = os.path.splitext(source_path)[1].lower()
+        image_extensions = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif']
+
+        # 3. Generate Unique Managed Filename
         unique_id = uuid.uuid4().hex[:8]
         timestamp = int(time.time())
-        prefix = "thumb" if is_thumbnail else "ref"
-        new_filename = f"{prefix}_{timestamp}_{unique_id}.png"
-        destination_path = os.path.join(save_dir, new_filename)
+        prefix = "thumb" if is_thumbnail else "att"
 
-        try:
-            with Image.open(source_path) as img:
-                # 3. Resize if it is a Project Thumbnail
-                if is_thumbnail:
-                    img.thumbnail((300, 200))
-                
-                # 4. Convert and Save as PNG
-                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                    img = img.convert('RGBA')
-                else:
-                    img = img.convert('RGB')
-                
-                img.save(destination_path, "PNG")
-                print(f"Image converted and saved to: {destination_path}")
+        # 4. BRANCH: Image Processing vs. File Copying
+        if ext in image_extensions:
+            # --- IMAGE LOGIC: Convert/Resize using Pillow ---
+            new_filename = f"{prefix}_{timestamp}_{unique_id}.png"
+            destination_path = os.path.join(save_dir, new_filename)
+            
+            try:
+                with Image.open(source_path) as img:
+                    # Resize if it is intended for the Project List thumbnail
+                    if is_thumbnail:
+                        img.thumbnail((300, 200))
+                    
+                    # Handle transparency/alpha channels
+                    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                        img = img.convert('RGBA')
+                    else:
+                        img = img.convert('RGB')
+                    
+                    img.save(destination_path, "PNG")
+                    print(f"Image processed and saved: {destination_path}")
+                    return destination_path
+
+            except Exception as e:
+                print(f"Error processing image: {e}")
+                messagebox.showerror("Image Error", f"Failed to process image:\n{e}")
+                return None
+        else:
+            # --- NON-IMAGE LOGIC: Copy Videos, Excel, Word, etc. ---
+            # We use the original extension to ensure OS file associations remain intact.
+            new_filename = f"{prefix}_{timestamp}_{unique_id}{ext}"
+            destination_path = os.path.join(save_dir, new_filename)
+            
+            try:
+                # Copy the file to the local media folder to manage it internally
+                shutil.copy2(source_path, destination_path)
+                print(f"Non-image file managed: {destination_path}")
                 return destination_path
-
-        except Exception as e:
-            print(f"Error converting image: {e}")
-            messagebox.showerror("Image Error", f"Failed to process image:\n{e}")
-            return None
+            except Exception as e:
+                print(f"Error copying file: {e}")
+                messagebox.showerror("File Error", f"Failed to attach file:\n{e}")
+                return None
 
     # --- CONTROLLER ACTIONS ---
 
-    def create_new_project(self, name: str, priority: int, due_date:str, image_path: Optional[str] = None):
-        final_image_path = self.save_image_as_png(image_path, is_thumbnail=True)
+    def create_new_project(self, name: str, priority: int, due_date: str, image_path: Optional[str] = None):
+        """Creates a project and processes the thumbnail."""
+        final_image_path = self.process_file_attachment(image_path, is_thumbnail=True)
         
         new_project = Project(
             name=name,
@@ -79,35 +106,49 @@ class ProjectManagementController:
         return new_project
 
     def update_existing_project(self, pid, name, priority, due, img):
-        final_image_path = self.save_image_as_png(img, is_thumbnail=True)
+        """Updates project details and processes new thumbnail if provided."""
+        final_image_path = self.process_file_attachment(img, is_thumbnail=True)
         
-        self.db_controller.update_project(Project(id=pid, name=name, priority=priority, due_date=due, thumbnail_path=final_image_path))
-        if self.main_window: self.main_window.refresh_project_list()
+        updated_project = Project(
+            id=pid, 
+            name=name, 
+            priority=priority, 
+            due_date=due, 
+            thumbnail_path=final_image_path
+        )
+        self.db_controller.update_project(updated_project)
+        
+        if self.main_window: 
+            self.main_window.refresh_project_list()
 
     def add_attachment(self, source_path, project_id, is_global=False):
-        final_path = self.save_image_as_png(source_path, is_thumbnail=False)
+        """Adds a reference media file (Image, Video, or Doc) to a specific project."""
+        final_path = self.process_file_attachment(source_path, is_thumbnail=False)
         
         if final_path:
             self.db_controller.add_attachment(final_path, project_id, is_global)
-            print(f"Attachment added for project {project_id}")
+            print(f"Attachment registered in DB for project {project_id}")
 
-    # --- GUI LINKING & PASS-THROUGHS ---
+    # --- GUI LINKING & DATA PASS-THROUGHS ---
 
     def get_all_projects_sorted(self): 
         return self.db_controller.get_projects_sorted()
     
     def delete_project_flow(self, pid):
         self.db_controller.delete_project(pid)
-        if self.main_window: self.main_window.refresh_project_list()
+        if self.main_window: 
+            self.main_window.refresh_project_list()
         
     def open_new_project_dialog(self):
         from gui.new_project_dialog import NewProjectDialog
-        if self.root: NewProjectDialog(self.root, controller=self)
+        if self.root: 
+            NewProjectDialog(self.root, controller=self)
         
     def open_edit_project_dialog(self, pid):
         from gui.new_project_dialog import NewProjectDialog
         p = self.db_controller.get_project_by_id(pid)
-        if p and self.root: NewProjectDialog(self.root, controller=self, project_to_edit=p)
+        if p and self.root: 
+            NewProjectDialog(self.root, controller=self, project_to_edit=p)
         
     def get_dates_for_project(self, pid): 
         return self.db_controller.get_log_dates(pid)
@@ -136,28 +177,24 @@ class ProjectManagementController:
     def delete_attachment(self, att_id): 
         self.db_controller.delete_attachment(att_id)
         
-    # --- UPDATED: OPEN PROJECT DETAIL WINDOW ---
     def open_project_detail_window(self, project_id: int):
+        """Hides main window and opens the dashboard for the selected project."""
         from gui.project_detail_window import ProjectDetailWindow
         project = self.db_controller.get_project_by_id(project_id)
         
         if project and self.root:
-            # 1. HIDE the Main Window
             self.root.withdraw()
-            
-            # 2. Create the Detail Window
             detail_window = ProjectDetailWindow(self.root, self, project)
             
-            # 3. Define the "On Close" behavior
             def on_close_detail():
-                self.root.deiconify()  # Show the main window again
+                self.root.deiconify()
                 if self.main_window:
-                    self.main_window.refresh_project_list() # Refresh list in case data changed
-                detail_window.window.destroy() # Actually destroy the detail window
+                    self.main_window.refresh_project_list()
+                detail_window.window.destroy()
             
-            # 4. Override the "X" button (Window Manager Delete Window)
             detail_window.window.protocol("WM_DELETE_WINDOW", on_close_detail)
 
     def open_attachment_manager(self):
         from gui.attachment_manager import AttachmentManager
-        if self.root: AttachmentManager(self.root, self)
+        if self.root: 
+            AttachmentManager(self.root, self)
