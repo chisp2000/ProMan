@@ -1,12 +1,14 @@
 import tkinter as tk
-import platform  # Needed to detect OS for opening files
+import platform
 import subprocess
 from tkinter import ttk, messagebox
 from tkinter import PhotoImage
 import os 
-# Assuming ttkthemes is available, but using standard ttk.Style commands
 from ttkthemes import ThemedStyle 
+from datetime import datetime
+import json
 
+mainFont = "Helvetica"
 
 class MainWindow:
     def __init__(self, root, controller):
@@ -22,42 +24,32 @@ class MainWindow:
         
         self.root.title("ProMan - Project Selector")
         self.root.geometry("1000x600") 
-        
 
         # --- STYLE DEFINITION ---
         style = ttk.Style(self.root)
-        # Get the background color defined in main.py (e.g., #2E2E2E)
         LIST_BG_COLOR = style.lookup('TFrame', 'background') 
+        self.bg_color = LIST_BG_COLOR
         
-        # Define a custom style for the inner frame background
         style.configure("DarkList.TFrame", background=LIST_BG_COLOR)
-        
-        # --- DEFINITIVE FIX: Custom Left-Anchored Button Style with Padding Override ---
-        # This fixes the left-spacing issue by reducing the theme's internal button padding.
         style.configure("LeftAnchor.TButton", anchor="w", padding=[1, 1, 1, 1])
-        # ------------------------
 
-        # --- Main Layout Setup (Two Columns: List left, Buttons right) ---
+        # --- Main Layout Setup ---
         outer_frame = ttk.Frame(self.root, padding="3")
         outer_frame.pack(fill='both', expand=True)
 
-        # --- FIX: Adjust Column Weights ---
         outer_frame.grid_columnconfigure(0, weight=1) 
         outer_frame.grid_columnconfigure(1, weight=0) 
         outer_frame.grid_rowconfigure(0, weight=1) 
-        # ------------------------------------
 
         # --- LEFT SIDE: Project List ---
-        # CRITICAL: We save self.left_frame so we can identify it in the scroll handler
         self.left_frame = ttk.Frame(outer_frame)
-        self.left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 0)) 
+        self.left_frame.grid(row=0, column=0, sticky="nsew") 
         self.left_frame.grid_rowconfigure(1, weight=1) 
         self.left_frame.grid_columnconfigure(0, weight=1) 
         
         ttk.Label(self.left_frame, text="Your Projects (Click to Select):").grid(row=0, column=0, sticky="w", pady=(0, 5))
         
-        # Scrollable Canvas setup (self.canvas is created here!)
-        self.canvas = tk.Canvas(self.left_frame, borderwidth=0, bg=LIST_BG_COLOR)
+        self.canvas = tk.Canvas(self.left_frame, borderwidth=0, bg=LIST_BG_COLOR, highlightthickness=0)
         self.scrollbar = ttk.Scrollbar(self.left_frame, orient="vertical", command=self.canvas.yview)
         self.project_display_frame = ttk.Frame(self.canvas, style="DarkList.TFrame")
         
@@ -65,310 +57,261 @@ class MainWindow:
         self.scrollbar.grid(row=1, column=1, sticky="ns")
         
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        self.canvas_window = self.canvas.create_window((0, 0), 
-                                                        window=self.project_display_frame, 
-                                                        anchor="nw"
-                                                        )
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.project_display_frame, anchor="nw")
+        
         self.canvas.bind('<Configure>', self.on_canvas_resize)
-        
-        # --- SCROLL WHEEL/TRACKPAD FIX: Global Binding with Container Check ---
-        
-        # 1. Bind X11 scroll events (Linux/older systems) directly to the canvas
-        self.canvas.bind("<Button-4>", lambda e: self.on_mousewheel(e, 1))
-        self.canvas.bind("<Button-5>", lambda e: self.on_mousewheel(e, -1))
-        
-        # 2. GLOBAL BINDING: Catch the MouseWheel event anywhere in the app
-        #    The handler '_on_mousewheel_propagate' will check if the mouse is over 'self.left_frame'
         self.root.bind_all("<MouseWheel>", self._on_mousewheel_propagate)
         
-        # ------------------------------------------------------------
-        
         # --- RIGHT SIDE: Control Buttons ---
-        
         buttons_container = ttk.Frame(outer_frame)
         buttons_container.grid(row=0, column=1, sticky="nw", padx=2, pady=(25, 0)) 
 
-        # 1. Open Project Button
-        self.open_project_btn = ttk.Button(
-            buttons_container, 
-            text="📂 Open Project", 
-            command=self.open_project_clicked,
-            state="disabled",
-            style="LeftAnchor.TButton" 
-        )
+        self.open_project_btn = ttk.Button(buttons_container, text="📂 Open Project", command=self.open_project_clicked, state="disabled", style="LeftAnchor.TButton")
         self.open_project_btn.pack(fill='x', pady=(0, 5), padx=10)
 
-        # 2. Batch Edit Attachments
-        ttk.Button(
-            buttons_container, 
-            text="📂 Batch Edit Attachments", 
-            command=self.controller.open_attachment_manager, 
-            style="LeftAnchor.TButton" 
-        ).pack(fill='x', pady=(0, 5), padx=10)
-        
-        # 3. Create New Project Button
-        new_project_btn = ttk.Button(
-            buttons_container, 
-            text="➕ Create New Project", 
-            command=self.controller.open_new_project_dialog,
-            style="LeftAnchor.TButton" 
-        )
-        new_project_btn.pack(fill='x', pady=(0, 5), padx=10) 
+        ttk.Button(buttons_container, text="📂 Edit Attachments", command=self.controller.open_attachment_manager, style="LeftAnchor.TButton").pack(fill='x', pady=(0, 5), padx=10)
+        ttk.Button(buttons_container, text="📝 Manage Log Templates", command=self.open_template_manager, style="LeftAnchor.TButton").pack(fill='x', pady=(0, 5), padx=10)
+        ttk.Button(buttons_container, text="➕ Create New Project", command=self.controller.open_new_project_dialog, style="LeftAnchor.TButton").pack(fill='x', pady=(0, 5), padx=10) 
 
-        # 4. Edit Project Button
-        self.edit_project_btn = ttk.Button(
-            buttons_container, 
-            text="✏️ Edit Selected Project", 
-            command=self.edit_project_clicked,
-            state="disabled",
-            style="LeftAnchor.TButton" 
-        )
+        self.edit_project_btn = ttk.Button(buttons_container, text="✏️ Edit Selected Project", command=self.edit_project_clicked, state="disabled", style="LeftAnchor.TButton")
         self.edit_project_btn.pack(fill='x', pady=(0, 5), padx=10)
 
-        # 5. Delete Project Button
-        self.delete_project_btn = ttk.Button(
-            buttons_container, 
-            text="\u232B Delete Selected Project", 
-            command=self.delete_project_clicked,
-            state="disabled",
-            style="LeftAnchor.TButton" 
-        )
+        self.delete_project_btn = ttk.Button(buttons_container, text="\u232B Delete Selected Project", command=self.delete_project_clicked, state="disabled", style="LeftAnchor.TButton")
         self.delete_project_btn.pack(fill='x', pady=(0, 5), padx=10)
+
+        self.export_docx_btn = ttk.Button(buttons_container, text="📄 Export Project (.docx)", 
+                                         command=self.export_project_docx, state="disabled", 
+                                         style="LeftAnchor.TButton")
+        self.export_docx_btn.pack(fill='x', pady=(0, 5), padx=10)
 
         self.refresh_project_list() 
 
-    # --- Button Handlers ---
+    # --- Handlers ---
+    def open_template_manager(self):
+        from gui.template_manager import TemplateManager
+        TemplateManager(self.root, self.controller)
 
     def open_project_clicked(self):
         if self.selected_project_id:
             self.controller.open_project_detail_window(self.selected_project_id)
-    
 
     def edit_project_clicked(self):
         if self.selected_project_id:
             self.controller.open_edit_project_dialog(self.selected_project_id)
-        else:
-            messagebox.showwarning("No Selection", "Please select a project tile to edit.")
 
-    # --- Layout and Selection Logic ---
+    def delete_project_clicked(self):
+        if self.selected_project_id is not None:
+            if messagebox.askyesno("Confirm Deletion", f"Are you sure you want to delete Project ID {self.selected_project_id}?"):
+                self.controller.delete_project_flow(self.selected_project_id)
 
     def on_canvas_resize(self, event):
-        """
-        Resizes the inner frame (self.project_display_frame) to match the 
-        canvas width, ensuring the project tiles expand correctly.
-        """
-        canvas_width = event.width
-        self.canvas.itemconfig(self.canvas_window, width=canvas_width - 5)
+        self.canvas.itemconfig(self.canvas_window, width=event.width - 5)
         self.project_display_frame.update_idletasks()
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
-    # --- UPDATED: Mouse Wheel Propagation Handler ---
     def _on_mousewheel_propagate(self, event):
-        """
-        Intercepts global MouseWheel events.
-        It checks if the mouse is currently over the 'left_frame' (the list container).
-        If so, it triggers scrolling.
-        """
-        # 1. Identify which widget is under the mouse cursor
-        widget_under_mouse = self.root.winfo_containing(event.x_root, event.y_root)
-        
-        if widget_under_mouse is None:
-            return
-
-        # 2. Traverse up the widget hierarchy to see if we are inside self.left_frame
-        current_widget = widget_under_mouse
-        while current_widget:
-            # If we find our list container in the ancestry, we should scroll
-            if current_widget == self.left_frame:
+        widget = self.root.winfo_containing(event.x_root, event.y_root)
+        while widget:
+            if widget == self.left_frame:
                 self.on_mousewheel(event)
-                return "break" # Stop event from bubbling up to root
-            
-            # Move up to the parent widget
-            current_widget = current_widget.master
-            
-            # Stop if we hit the root window
-            if current_widget == self.root:
-                break
+                return "break"
+            widget = widget.master
 
-    # --- UPDATED: Mouse Wheel Handler for Trackpads ---
-    def on_mousewheel(self, event, direction=None):
-        """
-        Handles mouse wheel and trackpad scroll events for the canvas.
-        """
-        # Determine the scroll delta/direction
-        if direction is not None:
-            # This handles Button-4/Button-5 (X11 systems)
-            delta = direction * -1 
-        elif event.delta:
-            # Windows/macOS MouseWheel
-            delta = event.delta
-        else:
-            return
-
-        # Normalization Logic:
-        # Standard mouse wheel scrolls in large jumps (e.g., +/- 120).
-        # Trackpads scroll in small increments.
-        
-        if abs(delta) >= 120:
-            # Normalize large scrolls (standard wheel click) to 1 unit * 4
-            scroll_amount = -1 * (delta // abs(delta)) * 4
-        else:
-            # For trackpads (small delta values), use delta directly for smooth scrolling
-            scroll_amount = -1 * delta * 0.5 
-        
+    def on_mousewheel(self, event):
+        delta = event.delta
+        scroll_amount = -1 * (delta // abs(delta)) * 4 if abs(delta) >= 120 else -1 * delta * 0.5 
         self.canvas.yview_scroll(int(scroll_amount), "units")
 
     def select_project(self, project_id: int, frame_widget):
-        """Sets the selected project ID and updates the GUI appearance."""
-        
         if self.last_selected_frame:
-            self.last_selected_frame.config(relief="solid") 
-            
-        frame_widget.config(relief="sunken") 
+            try: self.last_selected_frame.config(highlightbackground="#222222")
+            except: pass
+        
+        frame_widget.config(highlightthickness=2, highlightbackground="#FFFFFF")
         self.selected_project_id = project_id
         self.last_selected_frame = frame_widget
         
-        # Enable Buttons
         self.delete_project_btn.config(state="normal")
+        self.open_project_btn.config(state="normal")
+        self.edit_project_btn.config(state="normal")
+        self.export_docx_btn.config(state="normal")
 
-        if hasattr(self, 'open_project_btn'):
-              self.open_project_btn.config(state="normal")
-              
-        if hasattr(self, 'edit_project_btn'):
-              self.edit_project_btn.config(state="normal")
+    def export_project_docx(self):
+        if not self.selected_project_id:
+            return
 
-        print(f"Project ID {project_id} selected.")
+        from docx import Document
+        from docx.shared import Inches
+        from tkinter import filedialog
+        import re
 
-    def delete_project_clicked(self):
-        """Prompts for confirmation and calls the delete flow."""
-        if self.selected_project_id is not None:
+        project = self.controller.db_controller.get_project_by_id(self.selected_project_id)
+        logs = self.controller.get_all_logs_for_project(self.selected_project_id)
+        attachments = self.controller.get_attachments_for_project(self.selected_project_id)
+        att_map = {str(a.id): a.file_path for a in attachments}
+        
+        if not project:
+            messagebox.showerror("Error", "Could not find project data.")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".docx",
+            initialfile=f"{project.name}_Export.docx",
+            filetypes=[("Word Document", "*.docx")]
+        )
+
+        if not file_path:
+            return
+
+        try:
+            doc = Document()
+
+            # --- HEADER SECTION ---
+            doc.add_heading(project.name, 0)
+            doc.add_paragraph(f"Export Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
             
-            if messagebox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete Project ID {self.selected_project_id} and ALL related data?"):
-                self.controller.delete_project_flow(self.selected_project_id)
-        else:
-            messagebox.showwarning("No Selection", "Please select a project tile to delete first.")
+            # --- SEPARATING DESCRIPTION FROM LOGS ---
+            description_log = None
+            other_logs = []
 
+            for log in logs:
+                # We check the timestamp property specifically now
+                if log.timestamp == "DESCRIPTION":
+                    description_log = log
+                else:
+                    other_logs.append(log)
 
-    # --- Data Retrieval and Rendering ---
+            # --- RENDER DESCRIPTION FIRST ---
+            if description_log:
+                doc.add_heading("Project Description", level=1)
+                self._write_log_to_doc(doc, description_log, att_map)
+                doc.add_paragraph("") # Space after description
+                # If you want a full page break after description, uncomment below:
+                # doc.add_page_break() 
+
+            doc.add_paragraph("_" * 30)
+
+            # --- CHRONOLOGICAL LOGS SECTION ---
+            # Sort remaining logs by their actual date/time
+            sorted_logs = sorted(other_logs, key=lambda x: x.timestamp)
+
+            for log in sorted_logs:
+                doc.add_heading(log.timestamp, level=2)
+                self._write_log_to_doc(doc, log, att_map)
+                doc.add_paragraph("") 
+
+            doc.save(file_path)
+            messagebox.showinfo("Success", "Project exported successfully.")
+
+        except Exception as e:
+            messagebox.showerror("Export Error", f"An error occurred: {e}")
+
+    def _write_log_to_doc(self, doc, log, att_map):
+        """Helper to handle the [ref:x] parsing for any log entry."""
+        import re
+        from docx.shared import Inches
+        
+        content_text = ""
+        try:
+            log_data = json.loads(log.content)
+            content_text = log_data.get("text", "").replace('\\n', '\n')
+        except:
+            content_text = str(log.content)
+
+        if content_text.strip():
+            parts = re.split(r'(\[ref:\d+\])', content_text)
+            p = doc.add_paragraph()
+            
+            for part in parts:
+                ref_match = re.match(r'\[ref:(\d+)\]', part)
+                if ref_match:
+                    ref_id = ref_match.group(1)
+                    full_path = att_map.get(ref_id)
+                    if full_path and os.path.exists(full_path):
+                        ext = os.path.splitext(full_path)[1].lower()
+                        if ext in ['.png', '.jpg', '.jpeg', '.webp']:
+                            doc.add_picture(full_path, width=Inches(4))
+                            p = doc.add_paragraph() 
+                        else:
+                            p.add_run(f" [File: {os.path.basename(full_path)}] ").bold = True
+                    else:
+                        p.add_run(f" [Missing Ref: {ref_id}] ").italic = True
+                else:
+                    p.add_run(part)
 
     def refresh_project_list(self):
-        
-        # 1. Clear existing frames and reset state
         for widget in self.project_display_frame.winfo_children():
             widget.destroy()
+        
         self.project_image_references = [] 
         self.selected_project_id = None 
         self.last_selected_frame = None
         
-        # Disable Buttons
         self.delete_project_btn.config(state="disabled")
-
-        if hasattr(self, 'open_project_btn'):
-            self.open_project_btn.config(state="disabled")
-            
-        if hasattr(self, 'edit_project_btn'):
-            self.edit_project_btn.config(state="disabled")
+        self.open_project_btn.config(state="disabled")
+        self.edit_project_btn.config(state="disabled")
+        self.export_docx_btn.config(state="disabled")
         
         projects = self.controller.get_all_projects_sorted()
 
-        
-        
-        # 2. Draw a frame for each project
         for p in projects:
-            # Main container for the project tile
-            project_frame = ttk.Frame(self.project_display_frame, 
-                                      style="ProjectTile.TFrame") 
-            project_frame.pack(fill='x', padx=5, pady=5)
+            # Border Container
+            project_tile_container = tk.Frame(
+                self.project_display_frame, 
+                bg=self.bg_color,
+                highlightthickness=2, 
+                highlightbackground="#222222"
+            )
+            project_tile_container.pack(fill='x', padx=5, pady=5)
             
-            # --- Image Display (Packed Right) ---
-            image_label = tk.Label(project_frame) 
+            inner_content = ttk.Frame(project_tile_container, style="DarkList.TFrame")
+            inner_content.pack(fill='both', expand=True, padx=2, pady=2)
+            
+            # --- RESTORED THUMBNAIL LOGIC ---
+            image_label = tk.Label(inner_content, bg=self.bg_color) 
             image_loaded = False 
-            
             if p.thumbnail_path and os.path.exists(p.thumbnail_path):
                 try:
-                    # **CRITICAL: Load the image, then store the reference defensively**
                     photo_obj = PhotoImage(file=p.thumbnail_path)
-                    
-                    # Store the reference on the widget itself
                     image_label.image = photo_obj 
                     image_label.config(image=photo_obj)
-                    
-                    # Store a redundant reference in the master list
                     self.project_image_references.append(photo_obj) 
-                    
                     image_loaded = True
-                    
-                except tk.TclError as e:
-                    print(f"FATAL IMAGE LOAD ERROR (ID {p.id}): {e}")
-                    pass 
+                except: pass 
 
             if not image_loaded:
-                image_label.config(
-                    text="[Image Error/Missing]", 
-                    width=20, 
-                    height=8, 
-                    bg="red", 
-                    fg="white"
-                ) 
+                image_label.config(text="[No Image]", width=15, height=6, bg="#444", fg="white", font=("Arial", 8)) 
             
-            # Pack the image to the right (must happen before the text frame)
             image_label.pack(side='right', padx=10, pady=5)
             
-            # --- Text Container (Packs to the Left, Taking Remaining Space) ---
-            text_frame = ttk.Frame(project_frame, style="DarkList.TFrame")
+            # --- Text Content (Centered Vertically) ---
+            text_frame = ttk.Frame(inner_content, style="DarkList.TFrame")
             text_frame.pack(side='left', fill='both', expand=True, padx=10, pady=5) 
             
-            # Configure grid within the text_frame for vertical centering
-            text_frame.grid_columnconfigure(0, weight=1) 
-            text_frame.grid_rowconfigure(0, weight=1) 
-            text_frame.grid_rowconfigure(3, weight=1) 
+            # 1. This is the container that will be centered vertically
+            center_group = ttk.Frame(text_frame, style="DarkList.TFrame")
+            center_group.pack(expand=True) # expand=True here centers the whole block
             
-            # --- Text Details (Centered inside the Text Container) ---
             priority_text = {3: 'HIGH', 2: 'MEDIUM', 1: 'LOW'}.get(p.priority, 'N/A')
             
-            # Project Name (Row 1)
-            name_label = ttk.Label(text_frame, 
-                                   text=p.name, 
-                                   font=("EASVHS", 20), 
-                                   style="OrangeBold.TLabel",
-                                   anchor="center")
-            name_label.grid(row=1, column=0, sticky="n", pady=(5, 2)) 
+            # 2. Pack the Name inside the group (No expand here, so it sits tight)
+            name_lbl = ttk.Label(center_group, text=p.name, font=(mainFont, 18, "bold"), 
+                                 style="WhiteBold.TLabel")
+            name_lbl.pack(side="top", anchor="center")
 
-            # --- UPDATED: Details (Row 2) Composite Approach ---
-            # Instead of one label, we use a Frame to hold multiple labels with mixed fonts
-            detail_frame = ttk.Frame(text_frame, style="DarkList.TFrame")
-            detail_frame.grid(row=2, column=0, sticky="n", pady=(0, 5))
+            # 3. Pack the Details inside the group (No expand here)
+            details = f"Priority: {priority_text} | Due: {p.due_date}"
+            detail_lbl = ttk.Label(center_group, text=details, font=(mainFont, 12), 
+                                   style="White.TLabel")
+            detail_lbl.pack(side="top", anchor="center")
             
-            pixel_font = ("EASVHS", 14)
-            safe_font = ("Arial", 12) # Fallback font for symbols
+            # Recursive binding so clicking anything highlights the tile
+            def bind_all(widget, pid=p.id, container=project_tile_container):
+                widget.bind("<Button-1>", lambda e: self.select_project(pid, container))
+                widget.bind("<Double-Button-1>", lambda e: self.open_project_clicked())
+                for child in widget.winfo_children():
+                    bind_all(child, pid, container)
+            bind_all(project_tile_container)
 
-            # Helper to add parts and bind click event to them so selection works
-            def add_detail_part(text_str, font_to_use):
-                lbl = ttk.Label(detail_frame, text=text_str, font=font_to_use, style="Orange.TLabel")
-                lbl.pack(side="left")
-                # Bind click to select project
-                lbl.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
-
-            # Build the line: "Priority: HIGH | Due: YYYY-MM-DD"
-            add_detail_part("Priority", pixel_font)
-            add_detail_part(": ", safe_font)      # Safe font for colon
-            add_detail_part(priority_text, pixel_font)
-            add_detail_part(" | ", safe_font)      # Safe font for pipe
-            add_detail_part("Due", pixel_font)
-            add_detail_part(": ", safe_font)      # Safe font for colon
-            add_detail_part(p.due_date, pixel_font)
-            # ---------------------------------------------------
-            
-            # CRITICAL: Bind selection logic (must be bound to all widgets)
-            project_frame.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
-            
-            image_label.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
-            text_frame.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
-            
-            # Also bind any direct children of text_frame (like name_label and detail_frame)
-            for child in text_frame.winfo_children():
-                child.bind("<Button-1>", lambda e, pid=p.id, frame=project_frame: self.select_project(pid, frame))
-
-        # 3. Update the scroll region
         self.project_display_frame.update_idletasks()
         self.canvas.config(scrollregion=self.canvas.bbox("all"))

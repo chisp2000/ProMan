@@ -3,8 +3,10 @@ from typing import List, Optional
 from db_models import Project, LogEntry, Attachment 
 
 class DatabaseManager:
-    def __init__(self, db_path: str = "projects.db"):
+    def __init__(self, db_path: str):
         self.db_path = db_path
+        self.initialize_database()
+        print(f"DATABASE: Opening session at {self.db_path}")
         self.initialize_database()
 
     def _execute_sql(self, sql_command: str, params: tuple = ()):
@@ -32,7 +34,15 @@ class DatabaseManager:
             return []
 
     def initialize_database(self):
-        """Creates all necessary tables."""
+
+        create_template_sql = """
+        CREATE TABLE IF NOT EXISTS log_template (
+            template_id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            content TEXT NOT NULL
+        )
+        """
+
         create_project_sql = """
         CREATE TABLE IF NOT EXISTS project (
             project_id INTEGER PRIMARY KEY,
@@ -66,6 +76,7 @@ class DatabaseManager:
         self._execute_sql(create_project_sql)
         self._execute_sql(create_log_sql)
         self._execute_sql(create_attachment_sql)
+        self._execute_sql(create_template_sql)
 
     # --- PROJECT METHODS ---
 
@@ -105,6 +116,17 @@ class DatabaseManager:
 
     # --- LOG METHODS ---
 
+    def get_logs_for_project(self, project_id: int) -> List[LogEntry]:
+        """Fetches all logs for a project, sorted by date."""
+        sql = "SELECT * FROM log WHERE project_id = ? ORDER BY timestamp ASC"
+        rows = self._execute_query(sql, (project_id,))
+        return [LogEntry(
+            id=r['log_id'], 
+            project_id=r['project_id'], 
+            timestamp=r['timestamp'], 
+            content=r['content']
+        ) for r in rows]
+
     def create_log(self, project_id: int, content: str, timestamp: str):
         sql = "INSERT INTO log (project_id, content, timestamp) VALUES (?, ?, ?)"
         self._execute_sql(sql, (project_id, content, timestamp))
@@ -130,9 +152,15 @@ class DatabaseManager:
     # --- ATTACHMENT METHODS ---
 
     def add_attachment(self, file_path: str, project_id: int = None, is_global: bool = False):
+        # FORCE project_id to be an integer or None to prevent SQL errors
+        pid = int(project_id) if project_id is not None else None
+        is_g = 1 if is_global else 0
+        
         sql = "INSERT INTO attachment (file_path, project_id, is_global) VALUES (?, ?, ?)"
-        self._execute_sql(sql, (file_path, project_id, 1 if is_global else 0))
-
+        self._execute_sql(sql, (file_path, pid, is_g))
+        # Add a print here to confirm the DB actually ran the command
+        print(f"DATABASE: Saved attachment {file_path} for Project {pid} (Global: {is_g})")
+        
     def get_viewable_attachments(self, project_id: int) -> List[Attachment]:
         sql = "SELECT * FROM attachment WHERE project_id = ? OR is_global = 1"
         rows = self._execute_query(sql, (project_id,))
@@ -147,3 +175,12 @@ class DatabaseManager:
 
     def delete_attachment(self, attachment_id: int):
         self._execute_sql("DELETE FROM attachment WHERE attachment_id = ?", (attachment_id,))
+
+    def save_template(self, name: str, content: str):
+        self._execute_sql("INSERT INTO log_template (name, content) VALUES (?, ?)", (name, content))
+
+    def get_all_templates(self):
+        return self._execute_query("SELECT * FROM log_template")
+
+    def delete_template(self, tid):
+        self._execute_sql("DELETE FROM log_template WHERE template_id = ?", (tid,))
