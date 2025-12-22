@@ -9,6 +9,8 @@ class DatabaseManager:
         print(f"DATABASE: Opening session at {self.db_path}")
         self.initialize_database()
 
+        
+
     def _execute_sql(self, sql_command: str, params: tuple = ()):
         """Utility to connect, execute a command, and commit."""
         try:
@@ -34,6 +36,19 @@ class DatabaseManager:
             return []
 
     def initialize_database(self):
+
+        create_expense_sql = """
+        CREATE TABLE IF NOT EXISTS expense (
+            expense_id INTEGER PRIMARY KEY,
+            project_id INTEGER,
+            date TEXT,
+            item_desc TEXT NOT NULL,
+            quantity INTEGER DEFAULT 1,
+            price REAL DEFAULT 0.0,
+            link TEXT,
+            FOREIGN KEY(project_id) REFERENCES project(project_id)
+        )
+        """
 
         create_template_sql = """
         CREATE TABLE IF NOT EXISTS log_template (
@@ -77,6 +92,7 @@ class DatabaseManager:
         self._execute_sql(create_log_sql)
         self._execute_sql(create_attachment_sql)
         self._execute_sql(create_template_sql)
+        self._execute_sql(create_expense_sql)
 
     # --- PROJECT METHODS ---
 
