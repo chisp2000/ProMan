@@ -1,8 +1,18 @@
 ![](proman.png)
 
-# ProMan v0.1 (PROject MANager)
+# ProMan v0.3 (PROject MANager)
 ## Description:
-A project management software tailored for my own needs with features that I haven't seen other free project management software have.
+Keep track of project progress and financials with a log editor and a finance editor with in text reference media, all in one window.
+
+## Features
+- Edit and organize project logs
+- Add and remove projects
+- Finance editor with a built in deficit/surplus indicator which compares total spending with your set budget.
+- Reference JPG's, PDF's, DOCX's, PNG's, XLSM's and more directly in the log text using: [ref:REF_ID] where REF_ID is the reference ID which shows up above the reference material after you add it to the Reference Media section in the project detail window.
+  <img width="1152" height="773" alt="Proman_detail_0v3" src="https://github.com/user-attachments/assets/69b139c1-9936-4b0f-b64c-7c4ca8ea8a9a" />
+- Keep track of spending with built in status on deficit/surplus with an overview of all purchases and of what for the specific entry day. The finance editor automatically scans for purchase information from your logs using 
+  <img width="1142" height="750" alt="Proman_finances_0v3" src="https://github.com/user-attachments/assets/746a47ec-ecc3-4995-a96b-48b1232abb61" />
+- Export full project with financial information, all logs and a description in a pre-programmed order into a DOCX file.
 
 
 ## Dependencies:
@@ -13,15 +23,6 @@ A project management software tailored for my own needs with features that I hav
 
 ## Todo:
 - Want the ability to organize all my projects according to priority and date.
-- Each project will have an internal logging function.
-- Each project should have the ability to have thumbnails and have pictures appended to the logs with references.
-- Must be possible to export the logs into PDF's.
-- Must have GUI.
+- Must enforce a standard date format and be able to sort logs and projects after date.
+- Add tags.
 
-## Structure:
-- Has three layers: Data Layer, Logic and GUI.
-
-## Instructions:
-
-### To reference images in log entries:
-Look at the reference ID on the attachment in the "Reference Media" column and type [ref:ID] then save.
